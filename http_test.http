@@ -1,0 +1,6 @@
+POST http://localhost:3000/api/media/compress
+Content-Type: application/json
+
+{
+  "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+}

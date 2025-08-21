@@ -1,84 +1,148 @@
-# Media Processor
+# Mobeet Media Processor
 
-A high-performance Node.js media processing service that applies instagram story like filters, overlays stickers and text, and outputs optimized images or videos.  
-Uses **FFmpeg** for media manipulation and **Redis** + **BullMQ** for job queuing.
+A **clean and minimal** Express.js TypeScript API for media processing with proper project structure.
 
----
+## ✨ Features
 
-## 🚀 Prerequisites
+- **TypeScript**: Full type safety with clean organization
+- **Express.js**: Well-structured web framework setup
+- **Clean Architecture**: Proper separation of concerns
+- **Health Checks**: Essential health endpoint
+- **Security**: Helmet.js for headers
+- **CORS**: Cross-origin support
+- **Simple**: No over-engineering or unnecessary complexity
 
-Make sure you have the following installed:
+## 📁 Clean Structure
 
-- **[Redis](https://redis.io/)** — for job queue processing.
-- **[FFmpeg CLI](https://ffmpeg.org/)** — for image/video manipulation.
-- **[Node.js](https://nodejs.org/)** (with [nvm](https://github.com/nvm-sh/nvm) recommended).
+```
+mobeet-media-processor/
+├── src/
+│   ├── config/           # Simple configuration
+│   │   └── index.ts
+│   ├── controllers/      # Clean request handlers
+│   │   ├── healthController.ts
+│   │   └── mediaController.ts
+│   ├── middleware/       # Essential middleware only
+│   │   └── errorHandler.ts
+│   ├── routes/          # Route definitions
+│   │   ├── health.ts
+│   │   └── media.ts
+│   ├── services/        # Business logic
+│   │   └── mediaService.ts
+│   ├── types/           # TypeScript definitions
+│   │   └── index.ts
+│   ├── app.ts           # Express app setup
+│   └── server.ts        # Server startup
+├── dist/                # Compiled JavaScript
+├── .env.example         # Environment variables
+├── package.json
+├── tsconfig.json
+└── README.md
+```
 
----
+Well-organized, but **simple**.
 
-## 📦 Installation & Setup
+## 🛠️ Setup
+
+### Prerequisites
+
+- Node.js 24 (specified in `.nvmrc`)
+- npm or yarn
+- nvm (recommended for Node version management)
+
+### Installation
+
+1. **Clone and navigate to the project:**
+   ```bash
+   cd mobeet-media-processor
+   ```
+
+2. **Use the correct Node.js version (if using nvm):**
+   ```bash
+   nvm use
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+4. **Set up environment variables:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+5. **Build the project:**
+   ```bash
+   npm run build
+   ```
+
+## 🏃 Quick Start
 
 ```bash
-# Step 1: Select the correct Node.js version
-nvm use
-
-# Step 2: Build the project
+npm install
 npm run build
-
-# Step 3: Start the service
-npm run start
-
-
-## 1️⃣ Image Processing:
-curl -v \
-  --form "file=@/home/atanu/media-processor/uploads/atanu.png" \
-  --form-string 'metadata={
-    "post": false,
-    "mediaType": "image",
-    "background": {
-      "aspectRatio": "9:16",
-      "color": "#000000"
-    },
-    "content": {
-      "position": { "x": 0, "y": 0 },
-      "size": { "width": 1080, "height": 1920 },
-      "rotation": 0
-    },
-    "filters": {
-      "ffmpeg": "curves=all='\''0/0.05 0.3/0.25 0.7/0.8 1/1'\'',hue=s=0,eq=contrast=1.4:brightness=0.08"
-    },
-    "stickers": [
-      { "name": "1971", "position": { "x": 100, "y": 400 }, "size": { "width": 200, "height": 200 }, "rotation": 0, "z": 10, "opacity": 1 },
-      { "name": "1971", "position": { "x": 550, "y": 400 }, "size": { "width": 200, "height": 200 }, "rotation": 0, "z": 10, "opacity": 1 }
-    ],
-    "output": { "quality": 90 }
-  }' \
-  http://localhost:8000/process
-
-
-
-## 2️⃣ Video Processing
-curl -v \
-  --form "file=@/home/atanu/media-processor/uploads/ufc.mp4" \
-  --form-string 'metadata={
-    "post": false,
-    "mediaType": "video",
-    "background": {
-      "aspectRatio": "9:16",
-      "color": "#000000"
-    },
-    "content": {
-      "position": { "x": 0, "y": 0 },
-      "size": { "width": 1080, "height": 1920 },
-      "rotation": 0
-    },
-    "filters": {
-      "ffmpeg": "colorbalance=rs=0.2:bs=-0.2,eq=saturation=1.1"
-    },
-    "stickers": [
-      { "name": "1971", "position": { "x": 100, "y": 400 }, "size": { "width": 200, "height": 200 }, "rotation": 0, "z": 10, "opacity": 1 },
-      { "name": "1971", "position": { "x": 550, "y": 400 }, "size": { "width": 200, "height": 200 }, "rotation": 0, "z": 10, "opacity": 1 }
-    ],
-    "output": { "quality": 90 }
-  }' \
-  http://localhost:8000/process
+npm run dev
 ```
+
+### Scripts
+
+- `npm run dev` - Development with auto-reload
+- `npm run build` - Compile TypeScript
+- `npm start` - Run production build
+- `npm run clean` - Clean build files
+
+## 📡 API Endpoints
+
+- `GET /` - API info
+- `GET /health` - Health check
+- `POST /api/media/process` - Process media (needs `inputUrl`)
+- `GET /api/media/jobs` - List all jobs
+- `GET /api/media/jobs/:id` - Get specific job
+
+### Quick Test
+
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Create job
+curl -X POST http://localhost:3000/api/media/process \
+  -H "Content-Type: application/json" \
+  -d '{"inputUrl": "https://example.com/video.mp4"}'
+
+# List jobs
+curl http://localhost:3000/api/media/jobs
+```
+
+## ⚙️ Environment Variables
+
+Optional `.env` file:
+```env
+PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=*
+```
+
+## 🔧 How It Works
+
+- **`config/`**: Simple environment configuration
+- **`controllers/`**: Clean request handlers
+- **`middleware/`**: Essential error handling
+- **`routes/`**: Organized API endpoints
+- **`services/`**: Business logic layer
+- **`types/`**: TypeScript interfaces
+- **In-memory storage**: Jobs stored in array (add database later)
+
+## 🚀 Adding Features
+
+1. Add types to `types/index.ts`
+2. Add business logic to `services/`
+3. Add controllers to `controllers/`
+4. Add routes to `routes/`
+5. Register routes in `app.ts`
+
+---
+
+**Clean and simple! 🚀**

@@ -1,0 +1,322 @@
+import {IJobService} from "../IJobService";
+import {inject, injectable} from "tsyringe";
+import {getLogger} from "../../../logger";
+import {CompressMediaReqJobData, JobDataBase} from "../../../types/jobService.types";
+import {IMediaService} from "../../mediaService/IMediaService";
+import {FFMPEG_SERVICE, MEDIA_SERVICE} from "../../../consts/DependencyConstants";
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import {createWriteStream} from "node:fs";
+import {pipeline} from "node:stream/promises";
+import {IFFmpegService} from "../../FFmpegService/IFFmpegService";
+
+interface JobState {
+    state: string;
+    jobData: JobDataBase;
+}
+
+@injectable()
+export default class InMemoryJobService implements IJobService {
+    private readonly log = getLogger(InMemoryJobService.name);
+    private jobState: Map<string, JobState> = new Map();
+
+    // Updated to handle async functions
+    private jobProcessorMap = new Map<string, (state: JobState) => Promise<void>>([
+        [CompressMediaReqJobData.name, this.handleCompressMediaRequest.bind(this)],
+    ]);
+
+    constructor(
+        @inject(MEDIA_SERVICE) private mediaService: IMediaService,
+        @inject(FFMPEG_SERVICE) private ffmpegService: IFFmpegService
+    ) {}
+
+    addJob(jobData: JobDataBase): string {
+        const uid = crypto.randomUUID();
+        this.jobState.set(uid, {jobData: jobData, state: 'QUEUED'});
+        this.processJobAsync(uid).then(() => {});
+        return uid;
+    }
+
+    private async processJobAsync(jobId: string): Promise<void> {
+        const jobState = this.jobState.get(jobId);
+        if (!jobState) {
+            this.log.warn(`Failed to find job with ID ${jobId}`);
+            return;
+        }
+
+        const processor = this.jobProcessorMap.get(jobState.jobData.constructor.name);
+        if (processor) {
+            jobState.state = "STARTED";
+            try {
+                await processor(jobState);
+                jobState.state = "COMPLETED";
+            } catch (error) {
+                this.log.error(`Job ${jobId} failed:`, error);
+                jobState.state = "FAILED";
+            }
+        } else {
+            this.log.warn(`No processor found for job data ${JSON.stringify(jobState.jobData)}`);
+            jobState.state = "FAILED";
+        }
+    }
+
+    private async handleCompressMediaRequest(state: JobState): Promise<void> {
+        const jobData = state.jobData as CompressMediaReqJobData;
+        this.log.info(`Starting compress media request job for URL: ${jobData.payload}`);
+
+        try {
+            const downloadDir = "./temp";
+            await this.ensureDirectoryExists(downloadDir);
+
+            // Variables to track the final file path for FFmpeg input
+            let finalFilePath: string;
+            let finalFileName: string;
+
+            // ========== DOWNLOAD PHASE ==========
+            state.state = `[DOWNLOAD] Starting download from URL: ${jobData.payload}`;
+
+            // Always fetch metadata to get the actual filename
+            const result = await this.mediaService.downloadMediaFromUrl(jobData.payload);
+
+            state.state = `[DOWNLOAD] Fetched media metadata: ${result.filename}${result.extension}`;
+
+            // Use the actual filename and extension from the media service
+            finalFileName = this.sanitizeFilename(`${result.filename}${result.extension}`);
+            finalFilePath = path.join(downloadDir, finalFileName);
+
+            // Check if file already exists
+            if (await this.fileExists(finalFilePath)) {
+                state.state = `[DOWNLOAD] File already exists, skipping download: ${finalFileName}`;
+                this.log.info(`Skipping download - file already exists: ${finalFilePath}`);
+            } else {
+                // Download the file
+                state.state = `[DOWNLOAD] Streaming media to: ${finalFileName}`;
+                await this.streamToFile(result.stream, finalFilePath);
+                state.state = `[DOWNLOAD] Successfully downloaded: ${finalFileName}`;
+                this.log.info(`Media downloaded successfully: ${finalFilePath}`);
+            }
+
+            // ========== FFMPEG COMPRESSION PHASE ==========
+            this.log.info(`[FFMPEG] Starting Compression of: ${finalFilePath}`);
+            state.state = `[FFMPEG] Starting compression`;
+
+            // Ensure output directory exists
+            const outputDir = "./output/compressed";
+            await this.ensureDirectoryExists(outputDir);
+
+            // Create output filename with compressed prefix
+            const nameWithoutExt = path.parse(finalFileName).name;
+            const originalExt = path.parse(finalFileName).ext;
+            const compressedFileName = `compressed_${nameWithoutExt}${originalExt}`;
+            const finalOutputPath = path.join(outputDir, compressedFileName);
+
+            // Check if compressed file already exists
+            if (await this.fileExists(finalOutputPath)) {
+                state.state = `[FFMPEG] Compressed file already exists: ${compressedFileName}`;
+                this.log.info(`Skipping compression - file already exists: ${finalOutputPath}`);
+                return;
+            }
+
+            // Verify input file exists before compression
+            if (!await this.fileExists(finalFilePath)) {
+                throw new Error(`Input file not found for compression: ${finalFilePath}`);
+            }
+
+            // Start compression and get child process
+            const cp = this.ffmpegService.compressVideo(finalFilePath, finalOutputPath, 500);
+
+            // Listen to child process output and update state
+            await new Promise<void>((resolve, reject) => {
+                // Listen to stdout (standard output)
+                cp.stdout?.on('data', (data: Buffer) => {
+                    const output = data.toString().trim();
+                    if (output) {
+                        state.state = `[FFMPEG] ${output}`;
+                        this.log.info(`[FFMPEG stdout] ${output}`);
+                    }
+                });
+
+                // Listen to stderr (FFmpeg progress info)
+                cp.stderr?.on('data', (data: Buffer) => {
+                    const output = data.toString().trim();
+
+                    // Parse FFmpeg progress output
+                    if (output.includes('time=')) {
+                        // Extract time and speed information
+                        const timeMatch = output.match(/time=(\S+)/);
+                        const speedMatch = output.match(/speed=(\S+)/);
+
+                        if (timeMatch && speedMatch) {
+                            state.state = `[FFMPEG] Processing... Time: ${timeMatch[1]}, Speed: ${speedMatch[1]}`;
+                        } else {
+                            state.state = `[FFMPEG] ${output}`;
+                        }
+                    } else if (output.includes('frame=')) {
+                        // Extract frame information
+                        const frameMatch = output.match(/frame=\s*(\d+)/);
+                        if (frameMatch) {
+                            state.state = `[FFMPEG] Processing frame ${frameMatch[1]}...`;
+                        } else {
+                            state.state = `[FFMPEG] ${output}`;
+                        }
+                    } else {
+                        state.state = `[FFMPEG] ${output}`;
+                    }
+
+                    this.log.info(`[FFMPEG] ${output}`);
+                });
+
+                // Handle process completion
+                cp.on('close', (code: number) => {
+                    if (code === 0) {
+                        state.state = `[FFMPEG] Compression completed successfully`;
+                        this.log.info(`[FFMPEG] Process completed with code: ${code}`);
+                        resolve();
+                    } else {
+                        const errorMsg = `FFmpeg process failed with code: ${code}`;
+                        state.state = `[FFMPEG] ${errorMsg}`;
+                        this.log.error(`[FFMPEG] ${errorMsg}`);
+                        reject(new Error(errorMsg));
+                    }
+                });
+
+                // Handle process exit
+                cp.on('exit', (code: number, signal: string) => {
+                    this.log.info(`[FFMPEG] Process exited with code: ${code}, signal: ${signal}`);
+                    if (code !== 0 && code !== null) {
+                        const errorMsg = `FFmpeg exited with code: ${code}`;
+                        state.state = `[FFMPEG] ${errorMsg}`;
+                        reject(new Error(errorMsg));
+                    }
+                });
+
+                // Handle process errors
+                cp.on('error', (error: Error) => {
+                    state.state = `[FFMPEG] Process error: ${error.message}`;
+                    this.log.error(`[FFMPEG] Process error:`, error);
+                    reject(error);
+                });
+
+                // Optional: Handle process spawn event
+                cp.on('spawn', () => {
+                    state.state = `[FFMPEG] Process spawned successfully`;
+                    this.log.info(`[FFMPEG] Process spawned, PID: ${cp.pid}`);
+                });
+            });
+
+            // Verify output file exists and get size info
+            if (await this.fileExists(finalOutputPath)) {
+                const originalSize = await this.getFileSize(finalFilePath);
+                const compressedSize = await this.getFileSize(finalOutputPath);
+                const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
+
+                state.state = `[FFMPEG] Compression complete! Reduced from ${this.formatFileSize(originalSize)} to ${this.formatFileSize(compressedSize)} (${compressionRatio}% reduction)`;
+                this.log.info(`[FFMPEG] Final result: ${finalOutputPath}`);
+                this.log.info(`[FFMPEG] Size reduction: ${this.formatFileSize(originalSize)} → ${this.formatFileSize(compressedSize)} (${compressionRatio}% smaller)`);
+            } else {
+                throw new Error('[FFMPEG] Compression completed but output file not found');
+            }
+
+        } catch (error: any) {
+            this.log.error('Media compression job failed:', error);
+            state.state = `[ERROR] Failed: ${error.message}`;
+            throw error;
+        }
+    }
+
+    /**
+     * Sanitize filename to remove/replace invalid characters
+     * @param filename The original filename
+     * @returns Sanitized filename safe for filesystem
+     */
+    private sanitizeFilename(filename: string): string {
+        // Remove or replace invalid characters for cross-platform compatibility
+        return filename
+            .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid chars with underscore
+            .replace(/\s+/g, '_') // Replace spaces with underscore
+            .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+            .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+            .substring(0, 255); // Limit filename length
+    }
+
+    /**
+     * Get file size for logging/verification
+     */
+    private async getFileSize(filePath: string): Promise<number> {
+        try {
+            const stats = await fs.stat(filePath);
+            return stats.size;
+        } catch {
+            return 0;
+        }
+    }
+
+    private async ensureDirectoryExists(dirPath: string): Promise<void> {
+        try {
+            await fs.access(dirPath);
+        } catch {
+            await fs.mkdir(dirPath, {recursive: true});
+            this.log.info(`Created directory: ${dirPath}`);
+        }
+    }
+
+    private async fileExists(filePath: string): Promise<boolean> {
+        try {
+            await fs.access(filePath);
+            const size = await this.getFileSize(filePath);
+            this.log.debug(`File exists: ${filePath} (${this.formatFileSize(size)})`);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async streamToFile(stream: NodeJS.ReadableStream, filePath: string): Promise<void> {
+        const writeStream = createWriteStream(filePath);
+        await pipeline(stream, writeStream);
+
+        // Log final file size
+        const size = await this.getFileSize(filePath);
+        this.log.info(`File saved: ${path.basename(filePath)} (${this.formatFileSize(size)})`);
+    }
+
+    /**
+     * Format file size in human-readable format
+     */
+    private formatFileSize(bytes: number): string {
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        if (bytes === 0) return '0 Bytes';
+
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    /**
+     * Get job status - useful for monitoring
+     */
+    public getJobStatus(jobId: string): string | undefined {
+        return this.jobState.get(jobId)?.state;
+    }
+
+    /**
+     * Get all job states - useful for debugging
+     */
+    public getAllJobStates(): Map<string, JobState> {
+        return new Map(this.jobState);
+    }
+
+    /**
+     * Clean up completed jobs to prevent memory leaks
+     */
+    public cleanupCompletedJobs(): number {
+        let cleaned = 0;
+        for (const [jobId, jobState] of this.jobState.entries()) {
+            if (jobState.state === 'COMPLETED' || jobState.state === 'FAILED') {
+                this.jobState.delete(jobId);
+                cleaned++;
+            }
+        }
+        this.log.info(`Cleaned up ${cleaned} completed jobs`);
+        return cleaned;
+    }
+}

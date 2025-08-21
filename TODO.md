@@ -8,6 +8,7 @@
 - Transform Service :- Image/video transformations (crop, scale, rotate, filters)
 - Overlay Service :- Sticker placement, text rendering, layer composition
 - Compression Service :- Quality settings, format conversion, size optimization
+- Introduce Abstract queue which can be replaced easily in future
 
 # Orchestrators (Business Logic Workflows)
 

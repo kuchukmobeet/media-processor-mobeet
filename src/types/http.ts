@@ -1,5 +1,4 @@
-import { Request, Response } from 'express';
-import { MediaRequest } from './media';
+import { Request } from 'express';
 
 export interface ProcessRequest extends Request {
   file?: Express.Multer.File;

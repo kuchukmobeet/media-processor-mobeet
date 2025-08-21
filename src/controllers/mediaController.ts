@@ -4,9 +4,7 @@ import { AssetService } from '../services/assetService';
 import { HealthResponse, ProcessRequest, ProcessResponse } from '../types/http';
 import { mediaRequestSchema } from '../validators/media';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
-import pino from 'pino';
-
-const logger = pino({ name: 'media-controller' });
+import { loggers, logUtils } from '../utils/logger';
 
 export class MediaController {
   private mediaService = new MediaService();
@@ -25,14 +23,14 @@ export class MediaController {
     };
 
     if (!dependencies.ffmpeg) {
-      logger.warn(
+      loggers.controller.warn(
         { dependencies },
         'Health check failed - missing dependencies'
       );
       throw new AppError('Service dependencies not available', 503);
     }
 
-    logger.info('Health check passed');
+    loggers.controller.info('Health check passed');
     res.json(response);
   });
 
@@ -55,7 +53,7 @@ export class MediaController {
 
     const validatedRequest = mediaRequestSchema.parse(metadata);
 
-    logger.info(
+    loggers.controller.info(
       {
         file: {
           originalname: req.file.originalname,
@@ -83,7 +81,7 @@ export class MediaController {
       },
     };
 
-    logger.info(
+    loggers.controller.info(
       {
         outputUrl,
         processingTime: result.duration,

@@ -8,6 +8,7 @@ import {
   ensureDirectory,
   deleteFile,
 } from '../utils/file';
+import { loggers, logUtils } from '../utils/logger';
 
 export class MediaService {
   private imageProcessor = new ImageProcessor();
@@ -25,6 +26,8 @@ export class MediaService {
     inputPath: string,
     request: MediaRequest
   ): Promise<ProcessingResult> {
+    const startTime = Date.now();
+
     // Generate unique output filename
     const extension = request.mediaType === 'video' ? '.mp4' : '.jpg';
     const outputFileName = generateUniqueFilename(
@@ -32,6 +35,16 @@ export class MediaService {
       extension
     );
     const outputPath = path.join(config.outputsDir, outputFileName);
+
+    // Log processing start
+    logUtils.logProcessingStart(loggers.service, 'media processing', {
+      inputPath,
+      outputPath,
+      mediaType: request.mediaType,
+      hasFilters: !!request.filters?.ffmpeg,
+      stickerCount: request.stickers?.length || 0,
+      textCount: request.text?.length || 0,
+    });
 
     try {
       let result: ProcessingResult;
@@ -50,14 +63,42 @@ export class MediaService {
         );
       }
 
+      // Log processing completion
+      const duration = Date.now() - startTime;
+      logUtils.logProcessingComplete(
+        loggers.service,
+        'media processing',
+        {
+          outputPath,
+          mediaType: request.mediaType,
+          outputSize: result.size,
+        },
+        duration
+      );
+
       return result;
     } catch (error) {
+      // Log processing error
+      logUtils.logProcessingError(
+        loggers.service,
+        'media processing',
+        error as Error,
+        {
+          inputPath,
+          outputPath,
+          mediaType: request.mediaType,
+          duration: Date.now() - startTime,
+        }
+      );
+
       // Clean up output file if processing failed
       await deleteFile(outputPath);
       throw error;
     } finally {
       // Always clean up input file
       await deleteFile(inputPath);
+
+      loggers.service.debug({ inputPath }, 'Cleaned up input file');
     }
   }
 
@@ -82,7 +123,17 @@ export class MediaService {
         ensureDirectory(path.join(config.assetsDir, 'luts')),
       ]);
     } catch (error) {
-      console.error('Failed to initialize directories:', error);
+      loggers.service.error(
+        {
+          error,
+          directories: {
+            uploads: config.uploadsDir,
+            outputs: config.outputsDir,
+            assets: config.assetsDir,
+          },
+        },
+        'Failed to initialize directories'
+      );
       throw new Error('Failed to initialize storage directories');
     }
   }

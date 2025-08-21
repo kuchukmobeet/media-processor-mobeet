@@ -1,138 +1,127 @@
-import "dotenv/config";
-import express from "express";
-import multer from "multer";
-import path from "node:path";
-import fs from "node:fs/promises";
-import { Queue, Worker, JobsOptions } from "bullmq";
-import { MediaSchema } from "./z/MediaSchema";
-import { MEDIA } from "./config/media";
-import cors from "cors";
-import helmet from "helmet";
-import pino from "pino";
-import { hashFileAndMeta } from "./utils/hashUpload";
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import multer from 'multer';
+import pino from 'pino';
 
-// workers
-import { processVideo } from "./worker/video";
-import { processImage } from "./worker/image";
+import { config } from './config';
+import { MediaController } from './controllers/mediaController';
+import { requestLogger } from './middleware/requestLogger';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
-const log = pino();
+const logger = pino({ name: 'media-processor-app' });
 
-async function bootstrap() {
+async function createApp(): Promise<express.Application> {
   const app = express();
 
-  await fs.mkdir(MEDIA.uploadDir, { recursive: true });
-  await fs.mkdir(MEDIA.outputDir, { recursive: true });
-  await fs.mkdir(path.join(MEDIA.assetsDir, "luts"), { recursive: true });
-  await fs.mkdir(path.join(MEDIA.assetsDir, "stickers"), { recursive: true });
-
-  app.use(express.json({ limit: "1mb" }));
-  app.use(cors());
+  // Security middleware
   app.use(helmet());
+  app.use(cors());
 
-  // serve saved outputs
-  app.use(
-    "/outputs",
-    express.static(MEDIA.outputDir, { maxAge: "30d", etag: true })
-  );
+  // Request parsing
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
+  // Logging
+  app.use(requestLogger);
+
+  // File upload configuration
   const upload = multer({
-    dest: MEDIA.uploadDir,
-    limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
-  });
-
-  const mediaQ = new Queue("media", {
-    connection: {
-      host: process.env.REDIS_HOST,
-      port: Number(process.env.REDIS_PORT),
+    dest: config.uploadsDir,
+    limits: {
+      fileSize: config.maxFileSize,
     },
-  });
+    fileFilter: (_req, file, cb) => {
+      // Accept common image and video formats
+      const allowedMimes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'video/mp4',
+        'video/quicktime',
+        'video/x-msvideo', // .avi
+        'video/webm',
+      ];
 
-  // Worker
-  new Worker(
-    "media",
-    async (job) => {
-      const { filePath, meta } = job.data;
-
-      // tie output filename to the BullMQ job id
-      const id = String(job.id);
-      const outExt = meta.mediaType === "video" ? "mp4" : "jpg";
-      const outputPath = path.join(MEDIA.outputDir, `${id}.${outExt}`);
-
-      await job.updateProgress(10); // before FFmpeg starts
-      console.log("Started job", job.id);
-
-      try {
-        if (meta.mediaType === "video") {
-          await processVideo({ inputPath: filePath, outputPath, meta });
-          await job.updateProgress(50);
-        } else {
-          await processImage({ inputPath: filePath, outputPath, meta });
-          await job.updateProgress(50);
-        }
-        await job.updateProgress(100);
-        return { output: outputPath };
-      } finally {
-        // Always delete the temp upload file
-        await fs
-          .unlink(filePath)
-          .catch((e) =>
-            console.warn("Failed to delete temp file:", filePath, e)
-          );
+      if (allowedMimes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Unsupported file type: ${file.mimetype}`));
       }
     },
-
-    {
-      connection: {
-        host: process.env.REDIS_HOST,
-        port: Number(process.env.REDIS_PORT),
-      },
-      concurrency: 2,
-    }
-  );
-
-  // /process route (REPLACE the whole handler)
-  app.post("/process", upload.single("file"), async (req, res) => {
-    try {
-      const meta = MediaSchema.parse(JSON.parse(req.body.metadata));
-      const filePath = req.file!.path;
-
-      // deterministic job id for same file+metadata
-      const deterministicId = await hashFileAndMeta(filePath, meta);
-
-      console.log(
-        `[${new Date().toISOString()}] /process -> ${req.file?.originalname} id=${deterministicId}`
-      );
-
-      const job = await mediaQ.add("process", { filePath, meta }, {
-        jobId: deterministicId, // <-- prevents duplicate enqueue
-        removeOnComplete: true,
-        removeOnFail: true,
-      } as JobsOptions);
-
-      res.json({ jobId: job.id });
-    } catch (e: any) {
-      console.error("Process error:", e);
-      res.status(400).json({ error: e.message });
-    }
   });
 
-  app.get("/status/:id", async (req, res) => {
-    const job = await mediaQ.getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: "not found" });
-    const state = await job.getState();
-    const result = await job.getReturnValue().catch(() => null);
-    const url = result?.output
-      ? `/outputs/${path.basename(result.output)}`
-      : null;
-    const progress = await job.getProgress();
-    res.json({ state, progress, result: result ? { ...result, url } : null });
-  });
+  // Static file serving for outputs
+  app.use('/outputs', express.static(config.outputsDir, {
+    maxAge: '7d', // Cache for 7 days
+    etag: true,
+  }));
 
-  const port = Number(process.env.PORT ?? 8000);
-  app.listen(port, () => log.info({ port }, "Media API listening"));
+  // Initialize controller
+  const mediaController = new MediaController();
+
+  // Routes
+  app.get('/health', mediaController.health);
+  app.post('/process', upload.single('file'), mediaController.processMedia);
+  app.get('/stickers', mediaController.listStickers);
+  app.get('/fonts', mediaController.listFonts);
+
+  // 404 handler
+  app.use(notFoundHandler);
+
+  // Error handler (must be last)
+  app.use(errorHandler);
+
+  return app;
 }
 
-bootstrap().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+async function startServer(): Promise<void> {
+  try {
+    const app = await createApp();
+    
+    app.listen(config.port, () => {
+      logger.info({
+        port: config.port,
+        environment: process.env.NODE_ENV || 'development',
+        pid: process.pid,
+        config: {
+          uploadsDir: config.uploadsDir,
+          outputsDir: config.outputsDir,
+          assetsDir: config.assetsDir,
+          videoEncoder: config.videoEncoder,
+        },
+      }, 'Media processor server started successfully');
+    });
+
+    // Graceful shutdown handling
+    const gracefulShutdown = (signal: string) => {
+      logger.info(`Received ${signal}, shutting down gracefully`);
+      process.exit(0);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error({ reason, promise }, 'Unhandled promise rejection');
+      process.exit(1);
+    });
+
+    process.on('uncaughtException', (error) => {
+      logger.error({ error }, 'Uncaught exception');
+      process.exit(1);
+    });
+
+  } catch (error) {
+    logger.error({ error }, 'Failed to start server');
+    process.exit(1);
+  }
+}
+
+// Only start server if this file is run directly
+if (require.main === module) {
+  startServer();
+}
+
+export { createApp };

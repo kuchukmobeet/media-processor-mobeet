@@ -69,6 +69,7 @@ async function createApp(): Promise<express.Application> {
   app.post('/process', upload.single('file'), mediaController.processMedia);
   app.get('/stickers', mediaController.listStickers);
   app.get('/fonts', mediaController.listFonts);
+  app.post('/compress', mediaController.compressMedia);
 
   // 404 handler
   app.use(notFoundHandler);

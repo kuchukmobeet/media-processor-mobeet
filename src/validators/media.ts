@@ -81,6 +81,21 @@ export const mediaRequestSchema = z.object({
   textOverlays: z.array(textOverlaySchema).optional(),
   output: outputSchema,
 });
+export const compressRequestSchema = z.object({
+  url: z.string().url('Must be a valid URL'),
+  options: z
+    .object({
+      videoHeight: z.number().min(240).max(1080).default(480),
+      imageQuality: z.number().min(1).max(10).default(4), // FFmpeg qscale:v value
+    })
+    .optional()
+    .default({
+      videoHeight: 480,
+      imageQuality: 4,
+    }),
+});
 
 export type MediaRequestInput = z.input<typeof mediaRequestSchema>;
 export type MediaRequestOutput = z.output<typeof mediaRequestSchema>;
+export type CompressRequestInput = z.input<typeof compressRequestSchema>;
+export type CompressRequestOutput = z.output<typeof compressRequestSchema>;

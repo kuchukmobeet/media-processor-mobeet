@@ -7,6 +7,19 @@ export interface ProcessRequest extends Request {
   };
 }
 
+export interface CompressResponse {
+  success: boolean;
+  data?: {
+    outputUrl: string;
+    originalSize?: number;
+    compressedSize: number;
+    compressionRatio?: number;
+    processingTime: number;
+    mediaType: 'image' | 'video';
+  };
+  error?: string;
+}
+
 export interface ProcessResponse {
   success: boolean;
   data?: {

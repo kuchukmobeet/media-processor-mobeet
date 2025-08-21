@@ -1,8 +1,13 @@
 import { Request, Response } from 'express';
 import { MediaService } from '../services/mediaService';
 import { AssetService } from '../services/assetService';
-import { HealthResponse, ProcessRequest, ProcessResponse } from '../types/http';
-import { mediaRequestSchema } from '../validators/media';
+import {
+  CompressResponse,
+  HealthResponse,
+  ProcessRequest,
+  ProcessResponse,
+} from '../types/http';
+import { compressRequestSchema, mediaRequestSchema } from '../validators/media';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
 import { loggers, logUtils } from '../utils/logger';
 
@@ -91,6 +96,76 @@ export class MediaController {
     );
 
     res.json(response);
+  });
+
+  // Add this method to MediaController class
+  /**
+   * Compress media from URL
+   */
+  compressMedia = asyncHandler(async (req: Request, res: Response) => {
+    // Validate request body
+    const validatedRequest = compressRequestSchema.parse(req.body);
+
+    loggers.controller.info(
+      {
+        url: validatedRequest.url,
+        options: validatedRequest.options,
+      },
+      'Compressing media from URL'
+    );
+
+    try {
+      // Compress the media
+      const result = await this.mediaService.compressRemote(
+        validatedRequest.url,
+        validatedRequest.options
+      );
+
+      const outputUrl = this.mediaService.getOutputUrl(result.outputPath);
+      const compressionRatio =
+        result.originalSize > 0
+          ? ((result.originalSize - result.compressedSize) /
+              result.originalSize) *
+            100
+          : 0;
+
+      const response: CompressResponse = {
+        success: true,
+        data: {
+          outputUrl,
+          originalSize: result.originalSize,
+          compressedSize: result.compressedSize,
+          compressionRatio: Math.round(compressionRatio * 100) / 100,
+          processingTime: result.processingTime,
+          mediaType: result.mediaType,
+        },
+      };
+
+      loggers.controller.info(
+        {
+          outputUrl,
+          originalSize: result.originalSize,
+          compressedSize: result.compressedSize,
+          compressionRatio,
+          processingTime: result.processingTime,
+          mediaType: result.mediaType,
+        },
+        'Media compression completed'
+      );
+
+      res.json(response);
+    } catch (error) {
+      loggers.controller.error(
+        {
+          url: validatedRequest.url,
+          error: (error as Error).message,
+        },
+        'Media compression failed'
+      );
+
+      // Re-throw to let error handler deal with it
+      throw error;
+    }
   });
 
   /**

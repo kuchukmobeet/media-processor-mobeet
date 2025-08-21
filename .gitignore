@@ -4,3 +4,4 @@ dist/
 /codebase_dump_script.sh
 .idea
 /codebase_dump.txt
+/diff.txt

@@ -9,7 +9,7 @@ import {
 } from '../types/http';
 import { compressRequestSchema, mediaRequestSchema } from '../validators/media';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
-import { loggers, logUtils } from '../utils/logger';
+import { loggers } from '../utils/logger';
 
 export class MediaController {
   private mediaService = new MediaService();

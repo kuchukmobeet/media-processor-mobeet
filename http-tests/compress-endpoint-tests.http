@@ -1,0 +1,141 @@
+### Test 1: Basic video compression from URL
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+  "options": {
+    "quality": 10,
+    "maxWidth": 854,
+    "maxHeight": 480
+  }
+}
+
+###
+
+### Test 2: High compression with smaller dimensions
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+  "options": {
+    "quality": 50,
+    "maxWidth": 640,
+    "maxHeight": 360
+  }
+}
+
+###
+
+### Test 3: Image compression from URL
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://via.placeholder.com/1920x1080.jpg",
+  "options": {
+    "quality": 85,
+    "maxWidth": 1024,
+    "maxHeight": 768
+  }
+}
+
+###
+
+### Test 4: Minimal options (should use defaults)
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://via.placeholder.com/800x600.png",
+  "options": {}
+}
+
+###
+
+### Test 5: Invalid URL (should fail)
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "not-a-valid-url",
+  "options": {
+    "quality": 80
+  }
+}
+
+###
+
+### Test 6: Missing URL (validation error)
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "options": {
+    "quality": 80
+  }
+}
+
+###
+
+### Test 7: With custom format specification
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+  "options": {
+    "quality": 75,
+    "maxWidth": 854,
+    "maxHeight": 480,
+    "format": "webm"
+  }
+}
+
+###
+
+### Test 8: Maximum quality (minimal compression)
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://via.placeholder.com/1200x800.jpg",
+  "options": {
+    "quality": 95,
+    "maxWidth": 1200,
+    "maxHeight": 800
+  }
+}
+
+###
+
+### Test 9: Very aggressive compression
+POST http://localhost:8000/compress
+Content-Type: application/json
+
+{
+  "url": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+  "options": {
+    "quality": 30,
+    "maxWidth": 320,
+    "maxHeight": 240
+  }
+}
+
+###
+
+### Test Health Endpoint (bonus)
+GET http://localhost:8000/health
+
+###
+
+### Test List Stickers (bonus)
+GET http://localhost:8000/stickers
+
+###
+
+### Test List Fonts (bonus)
+GET http://localhost:8000/fonts
+
+###

@@ -5,3 +5,4 @@ dist/
 .idea
 /codebase_dump.txt
 /diff.txt
+outputs

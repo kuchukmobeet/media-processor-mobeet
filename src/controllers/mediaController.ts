@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
 import { MediaService } from '../services/mediaService';
 import { AssetService } from '../services/assetService';
-import { ProcessRequest, ProcessResponse, HealthResponse } from '../types/http';
+import { HealthResponse, ProcessRequest, ProcessResponse } from '../types/http';
 import { mediaRequestSchema } from '../validators/media';
 import { AppError, asyncHandler } from '../middleware/errorHandler';
-import { getFileSize } from '../utils/file';
 import pino from 'pino';
 
 const logger = pino({ name: 'media-controller' });
@@ -18,7 +17,7 @@ export class MediaController {
    */
   health = asyncHandler(async (req: Request, res: Response) => {
     const dependencies = await this.mediaService.validateDependencies();
-    
+
     const response: HealthResponse = {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -26,7 +25,10 @@ export class MediaController {
     };
 
     if (!dependencies.ffmpeg) {
-      logger.warn({ dependencies }, 'Health check failed - missing dependencies');
+      logger.warn(
+        { dependencies },
+        'Health check failed - missing dependencies'
+      );
       throw new AppError('Service dependencies not available', 503);
     }
 
@@ -53,19 +55,25 @@ export class MediaController {
 
     const validatedRequest = mediaRequestSchema.parse(metadata);
 
-    logger.info({
-      file: {
-        originalname: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
+    logger.info(
+      {
+        file: {
+          originalname: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        },
+        request: validatedRequest,
       },
-      request: validatedRequest,
-    }, 'Processing media file');
+      'Processing media file'
+    );
 
     // Process the media
-    const result = await this.mediaService.processMedia(req.file.path, validatedRequest);
+    const result = await this.mediaService.processMedia(
+      req.file.path,
+      validatedRequest
+    );
     const outputUrl = this.mediaService.getOutputUrl(result.outputPath);
-    
+
     const response: ProcessResponse = {
       success: true,
       data: {
@@ -75,11 +83,14 @@ export class MediaController {
       },
     };
 
-    logger.info({
-      outputUrl,
-      processingTime: result.duration,
-      fileSize: result.size,
-    }, 'Media processing completed');
+    logger.info(
+      {
+        outputUrl,
+        processingTime: result.duration,
+        fileSize: result.size,
+      },
+      'Media processing completed'
+    );
 
     res.json(response);
   });
@@ -89,7 +100,7 @@ export class MediaController {
    */
   listStickers = asyncHandler(async (req: Request, res: Response) => {
     const stickers = await this.assetService.listStickers();
-    
+
     res.json({
       success: true,
       data: {
@@ -104,7 +115,7 @@ export class MediaController {
    */
   listFonts = asyncHandler(async (req: Request, res: Response) => {
     const fonts = await this.assetService.listFonts();
-    
+
     res.json({
       success: true,
       data: {

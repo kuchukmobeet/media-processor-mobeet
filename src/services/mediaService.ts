@@ -3,7 +3,11 @@ import { MediaRequest, ProcessingResult } from '../types/media';
 import { ImageProcessor } from '../processors/imageProcessor';
 import { VideoProcessor } from '../processors/videoProcessor';
 import { config } from '../config';
-import { generateUniqueFilename, ensureDirectory, deleteFile } from '../utils/file';
+import {
+  generateUniqueFilename,
+  ensureDirectory,
+  deleteFile,
+} from '../utils/file';
 
 export class MediaService {
   private imageProcessor = new ImageProcessor();
@@ -17,11 +21,14 @@ export class MediaService {
   /**
    * Process media file according to the request parameters
    */
-  async processMedia(inputPath: string, request: MediaRequest): Promise<ProcessingResult> {
+  async processMedia(
+    inputPath: string,
+    request: MediaRequest
+  ): Promise<ProcessingResult> {
     // Generate unique output filename
     const extension = request.mediaType === 'video' ? '.mp4' : '.jpg';
     const outputFileName = generateUniqueFilename(
-      path.basename(inputPath), 
+      path.basename(inputPath),
       extension
     );
     const outputPath = path.join(config.outputsDir, outputFileName);
@@ -30,9 +37,17 @@ export class MediaService {
       let result: ProcessingResult;
 
       if (request.mediaType === 'video') {
-        result = await this.videoProcessor.process(inputPath, outputPath, request);
+        result = await this.videoProcessor.process(
+          inputPath,
+          outputPath,
+          request
+        );
       } else {
-        result = await this.imageProcessor.process(inputPath, outputPath, request);
+        result = await this.imageProcessor.process(
+          inputPath,
+          outputPath,
+          request
+        );
       }
 
       return result;

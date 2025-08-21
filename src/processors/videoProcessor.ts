@@ -4,34 +4,44 @@ import { MediaRequest, ProcessingResult } from '../types/media';
 import { config, mediaConfig, getCanvas } from '../config';
 
 export class VideoProcessor extends BaseProcessor {
-  async process(inputPath: string, outputPath: string, request: MediaRequest): Promise<ProcessingResult> {
+  async process(
+    inputPath: string,
+    outputPath: string,
+    request: MediaRequest
+  ): Promise<ProcessingResult> {
     const startTime = Date.now();
     const canvas = getCanvas(request.post);
-    
+
     // Build input arguments
     const stickerPaths = await this.assetService.resolveStickerPaths(
       request.stickers.map(s => s.name)
     );
-    
+
     const inputArgs = [
       '-y', // Overwrite output
-      '-f', 'lavfi',
-      '-i', `color=size=${canvas.width}x${canvas.height}:rate=${mediaConfig.targetFps}:color=${request.background.color}`, // Canvas [0]
-      '-i', inputPath, // Main content [1]
+      '-f',
+      'lavfi',
+      '-i',
+      `color=size=${canvas.width}x${canvas.height}:rate=${mediaConfig.targetFps}:color=${request.background.color}`, // Canvas [0]
+      '-i',
+      inputPath, // Main content [1]
       ...stickerPaths.flatMap(path => [
-        '-loop', '1',
-        '-framerate', String(mediaConfig.targetFps),
-        '-i', path
+        '-loop',
+        '1',
+        '-framerate',
+        String(mediaConfig.targetFps),
+        '-i',
+        path,
       ]), // Looped stickers [2...]
     ];
 
     // Build filter graph
     const filterChains: string[] = [];
-    
+
     // Process main content
     const mainContentFilter = this.buildMainContentFilter(request, canvas);
     filterChains.push(mainContentFilter.filter);
-    
+
     // Overlay main content on canvas (with shortest=1 to match video duration)
     const { content } = request;
     const x = content.position.x;
@@ -40,9 +50,9 @@ export class VideoProcessor extends BaseProcessor {
     filterChains.push(
       `[0:v][${mainContentFilter.outputTag}]overlay=${x}:${y}:format=auto:shortest=1[${canvasOverlayTag}]`
     );
-    
+
     let currentOutputTag = canvasOverlayTag;
-    
+
     // Process stickers if any
     const stickerFilters = await this.buildStickerFilters(
       request.stickers,
@@ -50,11 +60,14 @@ export class VideoProcessor extends BaseProcessor {
       2 // Stickers start at input index 2
     );
     filterChains.push(...stickerFilters.map(f => f.filter));
-    
+
     // Process text overlays if any
-    const textFilters = await this.buildTextFilters(request.textOverlays || [], canvas);
+    const textFilters = await this.buildTextFilters(
+      request.textOverlays || [],
+      canvas
+    );
     filterChains.push(...textFilters.map(f => f.filter));
-    
+
     // Build layer overlays (stickers + text in Z-order)
     if (stickerFilters.length || textFilters.length) {
       const layerOverlays = this.buildLayerOverlaysForVideo(
@@ -65,25 +78,34 @@ export class VideoProcessor extends BaseProcessor {
         textFilters.map(f => f.outputTag)
       );
       filterChains.push(...layerOverlays.map(f => f.filter));
-      currentOutputTag = layerOverlays[layerOverlays.length - 1]?.outputTag || currentOutputTag;
+      currentOutputTag =
+        layerOverlays[layerOverlays.length - 1]?.outputTag || currentOutputTag;
     }
-    
+
     // Lock to target FPS
     const finalOutputTag = 'final_output';
-    filterChains.push(`[${currentOutputTag}]fps=${mediaConfig.targetFps}[${finalOutputTag}]`);
-    
+    filterChains.push(
+      `[${currentOutputTag}]fps=${mediaConfig.targetFps}[${finalOutputTag}]`
+    );
+
     // Try encoding with NVENC first, fallback to CPU
     const quality = Math.max(1, Math.min(100, request.output.quality));
-    const success = await this.tryVideoEncoding(inputArgs, filterChains, finalOutputTag, quality, outputPath);
-    
+    const success = await this.tryVideoEncoding(
+      inputArgs,
+      filterChains,
+      finalOutputTag,
+      quality,
+      outputPath
+    );
+
     if (!success) {
       throw new Error('All video encoding attempts failed');
     }
-    
+
     // Get file stats
     const fs = await import('node:fs/promises');
     const stats = await fs.stat(outputPath);
-    
+
     return {
       outputPath,
       duration: Date.now() - startTime,
@@ -101,8 +123,14 @@ export class VideoProcessor extends BaseProcessor {
     stickerTags: string[],
     textTags: string[]
   ): Array<{ filter: string; outputTag: string }> {
-    const baseOverlays = this.buildLayerOverlays(request, canvas, baseTag, stickerTags, textTags);
-    
+    const baseOverlays = this.buildLayerOverlays(
+      request,
+      canvas,
+      baseTag,
+      stickerTags,
+      textTags
+    );
+
     // Modify each overlay to include shortest=1
     return baseOverlays.map((overlay, index) => ({
       ...overlay,
@@ -122,13 +150,20 @@ export class VideoProcessor extends BaseProcessor {
   ): Promise<boolean> {
     const baseArgs = [
       ...inputArgs,
-      '-filter_complex', filterChains.join(';'),
-      '-map', `[${outputTag}]`,
-      '-map', '1:a?', // Include audio if present
-      '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
-      '-threads', '0',
-      '-filter_threads', '2',
+      '-filter_complex',
+      filterChains.join(';'),
+      '-map',
+      `[${outputTag}]`,
+      '-map',
+      '1:a?', // Include audio if present
+      '-pix_fmt',
+      'yuv420p',
+      '-movflags',
+      '+faststart',
+      '-threads',
+      '0',
+      '-filter_threads',
+      '2',
       '-shortest',
     ];
 
@@ -141,12 +176,18 @@ export class VideoProcessor extends BaseProcessor {
       try {
         await this.executeFFmpeg([
           ...baseArgs,
-          '-c:v', 'h264_nvenc',
-          '-preset', config.nvencPreset,
-          '-rc', 'vbr',
-          '-cq', String(cq),
-          '-b:v', '0',
-          '-c:a', 'copy',
+          '-c:v',
+          'h264_nvenc',
+          '-preset',
+          config.nvencPreset,
+          '-rc',
+          'vbr',
+          '-cq',
+          String(cq),
+          '-b:v',
+          '0',
+          '-c:a',
+          'copy',
           outputPath,
         ]);
         return true;
@@ -159,10 +200,14 @@ export class VideoProcessor extends BaseProcessor {
     try {
       await this.executeFFmpeg([
         ...baseArgs,
-        '-c:v', 'libx264',
-        '-preset', config.x264Preset,
-        '-crf', String(crf),
-        '-c:a', 'copy',
+        '-c:v',
+        'libx264',
+        '-preset',
+        config.x264Preset,
+        '-crf',
+        String(crf),
+        '-c:a',
+        'copy',
         outputPath,
       ]);
       return true;
@@ -174,11 +219,16 @@ export class VideoProcessor extends BaseProcessor {
     try {
       await this.executeFFmpeg([
         ...baseArgs,
-        '-c:v', 'libx264',
-        '-preset', config.x264Preset,
-        '-crf', String(crf),
-        '-c:a', 'aac',
-        '-b:a', '160k',
+        '-c:v',
+        'libx264',
+        '-preset',
+        config.x264Preset,
+        '-crf',
+        String(crf),
+        '-c:a',
+        'aac',
+        '-b:a',
+        '160k',
         outputPath,
       ]);
       return true;

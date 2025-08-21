@@ -53,10 +53,13 @@ async function createApp(): Promise<express.Application> {
   });
 
   // Static file serving for outputs
-  app.use('/outputs', express.static(config.outputsDir, {
-    maxAge: '7d', // Cache for 7 days
-    etag: true,
-  }));
+  app.use(
+    '/outputs',
+    express.static(config.outputsDir, {
+      maxAge: '7d', // Cache for 7 days
+      etag: true,
+    })
+  );
 
   // Initialize controller
   const mediaController = new MediaController();
@@ -79,19 +82,22 @@ async function createApp(): Promise<express.Application> {
 async function startServer(): Promise<void> {
   try {
     const app = await createApp();
-    
+
     app.listen(config.port, () => {
-      logger.info({
-        port: config.port,
-        environment: process.env.NODE_ENV || 'development',
-        pid: process.pid,
-        config: {
-          uploadsDir: config.uploadsDir,
-          outputsDir: config.outputsDir,
-          assetsDir: config.assetsDir,
-          videoEncoder: config.videoEncoder,
+      logger.info(
+        {
+          port: config.port,
+          environment: process.env.NODE_ENV || 'development',
+          pid: process.pid,
+          config: {
+            uploadsDir: config.uploadsDir,
+            outputsDir: config.outputsDir,
+            assetsDir: config.assetsDir,
+            videoEncoder: config.videoEncoder,
+          },
         },
-      }, 'Media processor server started successfully');
+        'Media processor server started successfully'
+      );
     });
 
     // Graceful shutdown handling
@@ -108,11 +114,10 @@ async function startServer(): Promise<void> {
       process.exit(1);
     });
 
-    process.on('uncaughtException', (error) => {
+    process.on('uncaughtException', error => {
       logger.error({ error }, 'Uncaught exception');
       process.exit(1);
     });
-
   } catch (error) {
     logger.error({ error }, 'Failed to start server');
     process.exit(1);

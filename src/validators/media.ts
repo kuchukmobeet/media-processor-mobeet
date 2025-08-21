@@ -10,12 +10,15 @@ const sizeSchema = z.object({
   height: z.number().min(1).max(2000),
 });
 
-const cropSchema = z.object({
-  x: z.number().min(0).default(0),
-  y: z.number().min(0).default(0),
-  width: z.number().min(1).optional(),
-  height: z.number().min(1).optional(),
-}).partial().default({});
+const cropSchema = z
+  .object({
+    x: z.number().min(0).default(0),
+    y: z.number().min(0).default(0),
+    width: z.number().min(1).optional(),
+    height: z.number().min(1).optional(),
+  })
+  .partial()
+  .default({});
 
 const contentSchema = z.object({
   position: positionSchema.default({ x: 0, y: 0 }),
@@ -24,15 +27,19 @@ const contentSchema = z.object({
   crop: cropSchema,
 });
 
-const backgroundSchema = z.object({
-  aspectRatio: z.enum(['9:16', '4:5']).default('9:16'),
-  color: z.string().default('#000000'),
-}).default({ aspectRatio: '9:16', color: '#000000' });
+const backgroundSchema = z
+  .object({
+    aspectRatio: z.enum(['9:16', '4:5']).default('9:16'),
+    color: z.string().default('#000000'),
+  })
+  .default({ aspectRatio: '9:16', color: '#000000' });
 
-const filtersSchema = z.object({
-  ffmpeg: z.string().optional(),
-  order: z.array(z.string()).optional(),
-}).default({});
+const filtersSchema = z
+  .object({
+    ffmpeg: z.string().optional(),
+    order: z.array(z.string()).optional(),
+  })
+  .default({});
 
 const stickerSchema = z.object({
   name: z.string(),
@@ -58,9 +65,11 @@ const textOverlaySchema = z.object({
   z: z.number().int().default(0),
 });
 
-const outputSchema = z.object({
-  quality: z.number().min(1).max(100).default(90),
-}).default({ quality: 90 });
+const outputSchema = z
+  .object({
+    quality: z.number().min(1).max(100).default(90),
+  })
+  .default({ quality: 90 });
 
 export const mediaRequestSchema = z.object({
   post: z.boolean().optional().default(false),

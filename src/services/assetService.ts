@@ -25,7 +25,9 @@ export class AssetService {
       }
     }
 
-    throw new Error(`Sticker not found: ${name} (expected ${name}.webp or ${name}.png)`);
+    throw new Error(
+      `Sticker not found: ${name} (expected ${name}.webp or ${name}.png)`
+    );
   }
 
   /**
@@ -38,9 +40,15 @@ export class AssetService {
   /**
    * Resolve font file path by family and weight
    */
-  async resolveFontPath(fontFamily: string, fontWeight = 'Medium'): Promise<string> {
+  async resolveFontPath(
+    fontFamily: string,
+    fontWeight = 'Medium'
+  ): Promise<string> {
     // Sanitize inputs
-    if (!/^[a-zA-Z0-9_\-]+$/.test(fontFamily) || !/^[a-zA-Z0-9_\-]+$/.test(fontWeight)) {
+    if (
+      !/^[a-zA-Z0-9_\-]+$/.test(fontFamily) ||
+      !/^[a-zA-Z0-9_\-]+$/.test(fontWeight)
+    ) {
       throw new Error(`Invalid font name: ${fontFamily}-${fontWeight}`);
     }
 
@@ -61,7 +69,7 @@ export class AssetService {
     try {
       const fs = await import('node:fs/promises');
       const files = await fs.readdir(this.assetPaths.stickers);
-      
+
       return files
         .filter(file => file.endsWith('.webp') || file.endsWith('.png'))
         .map(file => path.basename(file, path.extname(file)))
@@ -79,7 +87,7 @@ export class AssetService {
     try {
       const fs = await import('node:fs/promises');
       const files = await fs.readdir(this.assetPaths.fonts);
-      
+
       return files
         .filter(file => file.endsWith('.ttf'))
         .map(file => {

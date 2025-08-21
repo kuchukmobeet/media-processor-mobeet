@@ -35,7 +35,9 @@ export abstract class BaseProcessor {
     // Apply crop if specified
     if (content.crop?.width && content.crop.height) {
       const { x = 0, y = 0, width, height } = content.crop;
-      steps.push(`crop=${Math.round(width)}:${Math.round(height)}:${Math.round(x)}:${Math.round(y)}`);
+      steps.push(
+        `crop=${Math.round(width)}:${Math.round(height)}:${Math.round(x)}:${Math.round(y)}`
+      );
     }
 
     // Apply rotation if specified
@@ -46,10 +48,14 @@ export abstract class BaseProcessor {
 
     // Apply scaling
     if (content.size?.width && content.size?.height) {
-      steps.push(`scale=${Math.round(content.size.width)}:${Math.round(content.size.height)}:flags=bicubic`);
+      steps.push(
+        `scale=${Math.round(content.size.width)}:${Math.round(content.size.height)}:flags=bicubic`
+      );
     } else {
       // Fit to canvas with aspect ratio
-      steps.push(`scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=increase`);
+      steps.push(
+        `scale=${canvas.width}:${canvas.height}:force_original_aspect_ratio=increase`
+      );
       steps.push(`crop=${canvas.width}:${canvas.height}`);
     }
 
@@ -76,7 +82,7 @@ export abstract class BaseProcessor {
     const { content } = request;
     const x = clampFloat(content.position.x, 0, canvas.width);
     const y = clampFloat(content.position.y, 0, canvas.height);
-    
+
     const outputTag = 'canvas_with_content';
     return {
       filter: `[0:v][${inputTag}]overlay=${toExpression(x)}:${toExpression(y)}:format=auto[${outputTag}]`,
@@ -103,8 +109,12 @@ export abstract class BaseProcessor {
 
       // Scale sticker
       const hasSize = sticker.size?.width && sticker.size?.height;
-      const width = hasSize ? Math.round(sticker.size!.width) : `iw*${sticker.scale}`;
-      const height = hasSize ? Math.round(sticker.size!.height) : `ih*${sticker.scale}`;
+      const width = hasSize
+        ? Math.round(sticker.size!.width)
+        : `iw*${sticker.scale}`;
+      const height = hasSize
+        ? Math.round(sticker.size!.height)
+        : `ih*${sticker.scale}`;
       steps.push(`scale=${width}:${height}`);
 
       // Rotate sticker if needed
@@ -145,10 +155,24 @@ export abstract class BaseProcessor {
       const textTag = `text_${i}`;
 
       // Create text canvas
-      const pixelX = clampFloat(toPixels(text.x, canvas.width), 0, canvas.width);
-      const pixelY = clampFloat(toPixels(text.y, canvas.height), 0, canvas.height);
-      const boxWidth = Math.max(1, Math.round(toPixels(text.width, canvas.width)));
-      const boxHeight = Math.max(1, Math.round(toPixels(text.height, canvas.height)));
+      const pixelX = clampFloat(
+        toPixels(text.x, canvas.width),
+        0,
+        canvas.width
+      );
+      const pixelY = clampFloat(
+        toPixels(text.y, canvas.height),
+        0,
+        canvas.height
+      );
+      const boxWidth = Math.max(
+        1,
+        Math.round(toPixels(text.width, canvas.width))
+      );
+      const boxHeight = Math.max(
+        1,
+        Math.round(toPixels(text.height, canvas.height))
+      );
 
       filters.push({
         filter: `color=c=black@0:s=${boxWidth}x${boxHeight}:r=${mediaConfig.targetFps} [${canvasTag}]`,
@@ -156,14 +180,18 @@ export abstract class BaseProcessor {
       });
 
       // Add text to canvas
-      const fontPath = await this.assetService.resolveFontPath(text.fontFamily, text.fontWeight);
+      const fontPath = await this.assetService.resolveFontPath(
+        text.fontFamily,
+        text.fontWeight
+      );
       const fontColor = rgbaToFFmpegColor(text.color);
       const fontSize = this.calculateFontSize(boxWidth, canvas.height);
-      
+
       const escapedfontPath = this.escapePath(fontPath);
       const escapedText = this.escapeText(text.text);
 
-      let drawTextFilter = `drawtext=fontfile='${escapedfontPath}'` +
+      let drawTextFilter =
+        `drawtext=fontfile='${escapedfontPath}'` +
         `:text='${escapedText}'` +
         `:fontsize=${fontSize}` +
         `:fontcolor=${fontColor}` +
@@ -177,7 +205,7 @@ export abstract class BaseProcessor {
       }
 
       const outputTag = text.rotation ? `text_rotated_${i}` : textTag;
-      
+
       filters.push({
         filter: `[${canvasTag}]${drawTextFilter}[${textTag}]`,
         outputTag: textTag,
@@ -207,7 +235,7 @@ export abstract class BaseProcessor {
     textTags: string[]
   ): Array<{ filter: string; outputTag: string }> {
     // Combine stickers and text with their Z-indices
-    type Layer = 
+    type Layer =
       | { type: 'sticker'; z: number; tag: string; data: Sticker }
       | { type: 'text'; z: number; tag: string; data: TextOverlay };
 
@@ -237,7 +265,7 @@ export abstract class BaseProcessor {
       const outputTag = `layer_${i}`;
 
       let x: number, y: number;
-      
+
       if (layer.type === 'sticker') {
         x = clampFloat(layer.data.position.x, 0, canvas.width);
         y = clampFloat(layer.data.position.y, 0, canvas.height);

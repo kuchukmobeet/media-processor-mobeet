@@ -28,7 +28,7 @@ npm run build
 npm run start
 
 
-## 1️⃣ Image Processing: 
+## 1️⃣ Image Processing:
 curl -v \
   --form "file=@/home/atanu/media-processor/uploads/atanu.png" \
   --form-string 'metadata={
@@ -81,3 +81,4 @@ curl -v \
     "output": { "quality": 90 }
   }' \
   http://localhost:8000/process
+```

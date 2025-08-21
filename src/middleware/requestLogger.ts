@@ -6,21 +6,28 @@ const logger = pino({ name: 'media-processor' });
 /**
  * Request logging middleware
  */
-export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
+export const requestLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const startTime = Date.now();
   const { method, url, headers, body } = req;
 
   // Log incoming request
-  logger.info({
-    request: {
-      method,
-      url,
-      userAgent: headers['user-agent'],
-      contentType: headers['content-type'],
-      contentLength: headers['content-length'],
-      ip: req.ip,
+  logger.info(
+    {
+      request: {
+        method,
+        url,
+        userAgent: headers['user-agent'],
+        contentType: headers['content-type'],
+        contentLength: headers['content-length'],
+        ip: req.ip,
+      },
     },
-  }, 'Incoming request');
+    'Incoming request'
+  );
 
   // Log response when finished
   res.on('finish', () => {

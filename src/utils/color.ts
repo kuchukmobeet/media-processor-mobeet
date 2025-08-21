@@ -12,7 +12,7 @@ export const rgbaToFFmpegColor = (rgba: string): string => {
     const g = clamp255(Number(rgbaMatch[2]));
     const b = clamp255(Number(rgbaMatch[3]));
     const a = clampAlpha(rgbaMatch[4] !== undefined ? Number(rgbaMatch[4]) : 1);
-    
+
     return `0x${toHex(r)}${toHex(g)}${toHex(b)}@${a}`;
   }
 

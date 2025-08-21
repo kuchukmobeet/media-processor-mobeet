@@ -46,12 +46,15 @@ export const deleteFile = async (filePath: string): Promise<void> => {
 /**
  * Generate unique filename with timestamp and random suffix
  */
-export const generateUniqueFilename = (originalName: string, extension?: string): string => {
+export const generateUniqueFilename = (
+  originalName: string,
+  extension?: string
+): string => {
   const timestamp = Date.now();
   const random = crypto.randomBytes(4).toString('hex');
   const ext = extension || path.extname(originalName);
   const baseName = path.basename(originalName, path.extname(originalName));
-  
+
   return `${baseName}_${timestamp}_${random}${ext}`;
 };
 

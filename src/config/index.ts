@@ -26,7 +26,9 @@ export const config: AppConfig = {
   uploadsDir: process.env.MEDIA_UPLOAD_DIR || 'uploads',
   outputsDir: process.env.MEDIA_OUTPUT_DIR || 'outputs',
   assetsDir: process.env.MEDIA_ASSETS_DIR || 'assets',
-  videoEncoder: (process.env.VIDEO_ENCODER === 'nvenc' ? 'nvenc' : 'cpu') as 'nvenc' | 'cpu',
+  videoEncoder: (process.env.VIDEO_ENCODER === 'nvenc' ? 'nvenc' : 'cpu') as
+    | 'nvenc'
+    | 'cpu',
   nvencPreset: process.env.NVENC_PRESET || 'p5',
   x264Preset: process.env.X264_PRESET || 'medium',
   maxFileSize: 500 * 1024 * 1024, // 500MB

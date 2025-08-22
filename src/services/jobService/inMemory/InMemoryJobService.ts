@@ -1,7 +1,7 @@
 import {IJobService} from "../IJobService";
 import {inject, injectable} from "tsyringe";
 import {getLogger} from "../../../logger";
-import {CompressMediaReqJobData, JobDataBase} from "../../../types/jobService.types";
+import {CompressMediaReqJobData, JobDataBase, JobState} from "../../../types/jobService.types";
 import {IMediaService} from "../../mediaService/IMediaService";
 import {FFMPEG_SERVICE, MEDIA_SERVICE} from "../../../consts/DependencyConstants";
 import * as fs from 'fs/promises';
@@ -10,17 +10,11 @@ import {createWriteStream} from "node:fs";
 import {pipeline} from "node:stream/promises";
 import {IFFmpegService} from "../../FFmpegService/IFFmpegService";
 
-interface JobState {
-    state: string;
-    jobData: JobDataBase;
-}
-
 @injectable()
 export default class InMemoryJobService implements IJobService {
     private readonly log = getLogger(InMemoryJobService.name);
     private jobState: Map<string, JobState> = new Map();
 
-    // Updated to handle async functions
     private jobProcessorMap = new Map<string, (state: JobState) => Promise<void>>([
         [CompressMediaReqJobData.name, this.handleCompressMediaRequest.bind(this)],
     ]);
@@ -28,13 +22,27 @@ export default class InMemoryJobService implements IJobService {
     constructor(
         @inject(MEDIA_SERVICE) private mediaService: IMediaService,
         @inject(FFMPEG_SERVICE) private ffmpegService: IFFmpegService
-    ) {}
+    ) {
+    }
 
     addJob(jobData: JobDataBase): string {
         const uid = crypto.randomUUID();
         this.jobState.set(uid, {jobData: jobData, state: 'QUEUED'});
-        this.processJobAsync(uid).then(() => {});
+        this.processJobAsync(uid).then(() => {
+        });
         return uid;
+    }
+
+    getJobStatusByIds(ids: string[]): Map<string, string> {
+        this.log.info(`Get job status by ids ${ids}`);
+        const jobStatusMap: Map<string, string> = new Map();
+        ids.forEach(value => {
+            const state = this.jobState.get(value);
+            if (state) {
+                jobStatusMap.set(value, state.state);
+            }
+        })
+        return jobStatusMap;
     }
 
     private async processJobAsync(jobId: string): Promise<void> {
@@ -289,34 +297,5 @@ export default class InMemoryJobService implements IJobService {
 
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-    }
-
-    /**
-     * Get job status - useful for monitoring
-     */
-    public getJobStatus(jobId: string): string | undefined {
-        return this.jobState.get(jobId)?.state;
-    }
-
-    /**
-     * Get all job states - useful for debugging
-     */
-    public getAllJobStates(): Map<string, JobState> {
-        return new Map(this.jobState);
-    }
-
-    /**
-     * Clean up completed jobs to prevent memory leaks
-     */
-    public cleanupCompletedJobs(): number {
-        let cleaned = 0;
-        for (const [jobId, jobState] of this.jobState.entries()) {
-            if (jobState.state === 'COMPLETED' || jobState.state === 'FAILED') {
-                this.jobState.delete(jobId);
-                cleaned++;
-            }
-        }
-        this.log.info(`Cleaned up ${cleaned} completed jobs`);
-        return cleaned;
     }
 }

@@ -31,7 +31,7 @@ export class FFmpegServiceImpl implements IFFmpegService {
             `-crf 28 ` +                        // Use CRF for better quality/speed balance
             `-maxrate ${bitrate}k ` +           // Keep maxrate constraint
             `-bufsize ${bitrate * 1.5}k ` +     // Reduced buffer size for faster processing
-            `-vf "scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease" ` +
+            `-vf "scale='min(854,iw)':'min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2" ` +
             `-c:a aac ` +
             `-b:a 96k ` +                       // Reduced audio bitrate (was 128k)
             `-ac 2 ` +                          // Force stereo (faster than multi-channel)

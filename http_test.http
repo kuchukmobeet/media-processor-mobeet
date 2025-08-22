@@ -1,6 +1,22 @@
-POST http://localhost:3000/api/media/compress
+###Start compression job
+POST http://localhost:8000/api/media/compress
 Content-Type: application/json
 
 {
   "url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 }
+###
+
+###Get job status
+@id =ce537ece-9552-4ef8-a74f-8aee7435c5c5
+GET http://localhost:8000/api/job/status?ids={{id}}
+###
+
+
+
+
+
+
+
+
+

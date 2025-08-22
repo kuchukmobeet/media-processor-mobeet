@@ -11,3 +11,8 @@ export class CompressMediaReqJobData extends JobDataBase {
         super(url);
     }
 }
+
+export interface JobState {
+    state: string;
+    jobData: JobDataBase;
+}

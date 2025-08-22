@@ -62,13 +62,16 @@ export class MediaServiceImpl implements IMediaService {
                         }
                     }
 
-                    // Ensure extension is present
+                    // Extract existing extension from filename if no MIME extension
                     if (!ext) {
                         ext = extname(filename);
                     }
 
+                    // Only add extension if filename doesn't already have one
                     if (ext && !filename.endsWith(ext)) {
-                        filename += ext;
+                        // Remove any existing extension first to avoid duplicates
+                        const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+                        filename = nameWithoutExt + ext;
                     }
 
                     // Ensure we have a valid filename

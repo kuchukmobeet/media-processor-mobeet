@@ -3,13 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import config from './config';
 import logger from './logger';
-
-// Import and initialize DI container
 import './container';
 
 // Import routes
 import healthRoutes from './routes/health';
 import mediaRoutes from './routes/media';
+import jobRoutes from "./routes/job";
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -59,6 +58,7 @@ class App {
         // API routes
         this.app.use('/health', healthRoutes);
         this.app.use(`${config.api.prefix}/media`, mediaRoutes);
+        this.app.use(`${config.api.prefix}/job`, jobRoutes);
     }
 
     private initializeErrorHandling(): void {

@@ -1,3 +1,5 @@
+import {EventEmitter} from "node:events";
+
 export abstract class JobDataBase {
     payload: any;
 
@@ -20,14 +22,23 @@ export interface ImageCompressionOptions {
 
 export class CompressImageReqJobData extends JobDataBase {
     public options: ImageCompressionOptions;
-    
+
     constructor(url: string, options: ImageCompressionOptions) {
         super(url);
         this.options = options;
     }
 }
 
+export interface JobProgressEvent {
+    timestamp: number;
+    phase: string;
+    message: string;
+    data?: any;
+}
+
 export interface JobState {
     state: string;
     jobData: JobDataBase;
+    progressStream: EventEmitter;
+    startTime: number;
 }

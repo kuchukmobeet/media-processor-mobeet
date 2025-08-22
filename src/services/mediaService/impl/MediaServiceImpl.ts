@@ -7,12 +7,18 @@ import {PassThrough} from "node:stream";
 import {extension as extFromMime} from "mime-types";
 import {basename, extname} from "node:path";
 import {getLogger} from "../../../logger";
+import {EventEmitter} from "node:events";
+
+export interface MediaDownloadOptions {
+    authToken?: string;
+    onProgress?: (downloadedBytes: number, totalBytes?: number) => void;
+}
 
 @injectable()
 export class MediaServiceImpl implements IMediaService {
     private readonly logger = getLogger(MediaServiceImpl.name);
 
-    downloadMediaFromUrl(url: string, opts?: { authToken?: string; }): Promise<MediaDownloadResult> {
+    downloadMediaFromUrl(url: string, opts?: MediaDownloadOptions): Promise<MediaDownloadResult> {
         return new Promise((resolve, reject) => {
             const headers: Record<string, string> = {};
             if (opts?.authToken) headers.authorization = `Bearer ${opts.authToken}`;
@@ -33,6 +39,23 @@ export class MediaServiceImpl implements IMediaService {
 
             src.once("error", handleError);
             out.once("error", handleError);
+
+            // Track download progress if callback provided
+            if (opts?.onProgress) {
+                let downloadedBytes = 0;
+                let totalSize: number | undefined;
+
+                src.on('response', (res: any) => {
+                    if (res.headers['content-length']) {
+                        totalSize = parseInt(res.headers['content-length'], 10);
+                    }
+                });
+
+                src.on('data', (chunk: Buffer) => {
+                    downloadedBytes += chunk.length;
+                    opts.onProgress!(downloadedBytes, totalSize);
+                });
+            }
 
             src.pipe(out);
 

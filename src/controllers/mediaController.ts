@@ -17,6 +17,7 @@ export default class MediaController {
     }
     //TODO detect type automatically in future
     //TODO get multiple job ids if job starts multiple sub jobs
+    //TODO detect duplicate jobs
     async compressMedia(req: CompressMediaRequest, res: Response): Promise<void> {
         this.logger.info('Compress media endpoint called');
 

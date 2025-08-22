@@ -22,6 +22,9 @@
         .phase-FAILED { background: #ffebee; color: #c62828; }
         .phase-QUEUE { background: #fff3e0; }
         .phase-PROCESSING { background: #e1f5fe; }
+        .phase-SYSTEM { background: #f5f5f5; color: #666; }
+        .phase-ERROR { background: #ffebee; color: #c62828; }
+        .phase-HEARTBEAT { background: #f0f0f0; color: #999; }
         .status { margin-top: 10px; padding: 10px; border-radius: 4px; }
         .status.connected { background: #e8f5e8; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
@@ -33,14 +36,14 @@
 
 <div class="form-group">
     <label for="serverUrl">Server URL:</label>
-    <input type="text" id="serverUrl" placeholder="http://localhost:3000"
-           value="http://localhost:3000">
+    <input type="text" id="serverUrl" placeholder="http://localhost:8000"
+           value="http://localhost:8000">
 </div>
 
 <div class="form-group">
     <label for="mediaUrl">Media URL:</label>
     <input type="text" id="mediaUrl" placeholder="https://example.com/video.mp4"
-           value="https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4">
+           value="http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4">
 </div>
 
 <button id="submitBtn" onclick="submitJob()">Submit Compression Job</button>
@@ -53,7 +56,7 @@
 <div id="status" class="status" style="display: none;"></div>
 
 <div id="progressContainer" class="progress-container" style="display: none;">
-    <div class="progress-header">Real-time Progress</div>
+    <div class="progress-header">Real-time Progress (Latest 10 updates)</div>
     <div id="progressLog" class="progress-log"></div>
 </div>
 
@@ -183,7 +186,18 @@
         entry.innerHTML = `<strong>[${time}] [${phase}]</strong> ${message}`;
 
         logEl.appendChild(entry);
-        logEl.scrollTop = logEl.scrollHeight; // Auto-scroll to bottom
+
+        // Keep only the latest 10 entries
+        const entries = logEl.querySelectorAll('.log-entry');
+        if (entries.length > 10) {
+            // Remove the oldest entries (from the beginning)
+            for (let i = 0; i < entries.length - 10; i++) {
+                entries[i].remove();
+            }
+        }
+
+        // Instant scroll to bottom - no smooth scrolling
+        logEl.scrollTop = logEl.scrollHeight;
     }
 
     function clearProgressLog() {

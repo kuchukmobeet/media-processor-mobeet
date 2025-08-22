@@ -2,6 +2,7 @@ import {Request} from 'express';
 
 export interface CompressMediaRequestBody {
     url: string;
+    //TODO take in resolution
 }
 
 export interface CompressMediaRequest extends Request {

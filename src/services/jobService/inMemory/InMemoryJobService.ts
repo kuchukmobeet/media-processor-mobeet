@@ -1,14 +1,13 @@
 import {IJobService} from "../IJobService";
 import {inject, injectable} from "tsyringe";
 import {getLogger} from "../../../logger";
-import {CompressMediaReqJobData, CompressImageReqJobData, JobDataBase, JobState} from "../../../types/jobService.types";
+import {CompressImageReqJobData, CompressMediaReqJobData, JobDataBase, JobState} from "../../../types/jobService.types";
 import {IMediaService} from "../../mediaService/IMediaService";
 import {FFMPEG_SERVICE, MEDIA_SERVICE} from "../../../consts/DependencyConstants";
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import {createWriteStream} from "node:fs";
-import {pipeline} from "node:stream/promises";
 import {IFFmpegService} from "../../FFmpegService/IFFmpegService";
+import {ensureDirectoryExists, fileExists, getFileSize, streamToFile} from "../../../utils/file.util";
+import {formatFileSize, sanitizeFilename} from "../../../utils/media.util";
 
 @injectable()
 export default class InMemoryJobService implements IJobService {
@@ -75,7 +74,7 @@ export default class InMemoryJobService implements IJobService {
 
         try {
             const downloadDir = "./temp";
-            await this.ensureDirectoryExists(downloadDir);
+            await ensureDirectoryExists(downloadDir);
 
             // Variables to track the final file path for FFmpeg input
             let finalFilePath: string;
@@ -90,17 +89,17 @@ export default class InMemoryJobService implements IJobService {
             state.state = `[DOWNLOAD] Fetched media metadata: ${result.filename}${result.extension}`;
 
             // Use the actual filename and extension from the media service
-            finalFileName = this.sanitizeFilename(`${result.filename}${result.extension}`);
+            finalFileName = sanitizeFilename(`${result.filename}${result.extension}`);
             finalFilePath = path.join(downloadDir, finalFileName);
 
             // Check if file already exists
-            if (await this.fileExists(finalFilePath)) {
+            if (await fileExists(finalFilePath)) {
                 state.state = `[DOWNLOAD] File already exists, skipping download: ${finalFileName}`;
                 this.log.info(`Skipping download - file already exists: ${finalFilePath}`);
             } else {
                 // Download the file
                 state.state = `[DOWNLOAD] Streaming media to: ${finalFileName}`;
-                await this.streamToFile(result.stream, finalFilePath);
+                await streamToFile(result.stream, finalFilePath);
                 state.state = `[DOWNLOAD] Successfully downloaded: ${finalFileName}`;
                 this.log.info(`Media downloaded successfully: ${finalFilePath}`);
             }
@@ -111,7 +110,7 @@ export default class InMemoryJobService implements IJobService {
 
             // Ensure output directory exists
             const outputDir = "./output/compressed";
-            await this.ensureDirectoryExists(outputDir);
+            await ensureDirectoryExists(outputDir);
 
             // Create output filename with compressed prefix
             const nameWithoutExt = path.parse(finalFileName).name;
@@ -120,14 +119,14 @@ export default class InMemoryJobService implements IJobService {
             const finalOutputPath = path.join(outputDir, compressedFileName);
 
             // Check if compressed file already exists
-            if (await this.fileExists(finalOutputPath)) {
+            if (await fileExists(finalOutputPath)) {
                 state.state = `[FFMPEG] Compressed file already exists: ${compressedFileName}`;
                 this.log.info(`Skipping compression - file already exists: ${finalOutputPath}`);
                 return;
             }
 
             // Verify input file exists before compression
-            if (!await this.fileExists(finalFilePath)) {
+            if (!await fileExists(finalFilePath)) {
                 throw new Error(`Input file not found for compression: ${finalFilePath}`);
             }
 
@@ -214,14 +213,14 @@ export default class InMemoryJobService implements IJobService {
             });
 
             // Verify output file exists and get size info
-            if (await this.fileExists(finalOutputPath)) {
-                const originalSize = await this.getFileSize(finalFilePath);
-                const compressedSize = await this.getFileSize(finalOutputPath);
+            if (await fileExists(finalOutputPath)) {
+                const originalSize = await getFileSize(finalFilePath);
+                const compressedSize = await getFileSize(finalOutputPath);
                 const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
 
-                state.state = `[FFMPEG] Compression complete! Reduced from ${this.formatFileSize(originalSize)} to ${this.formatFileSize(compressedSize)} (${compressionRatio}% reduction)`;
+                state.state = `[FFMPEG] Compression complete! Reduced from ${formatFileSize(originalSize)} to ${formatFileSize(compressedSize)} (${compressionRatio}% reduction)`;
                 this.log.info(`[FFMPEG] Final result: ${finalOutputPath}`);
-                this.log.info(`[FFMPEG] Size reduction: ${this.formatFileSize(originalSize)} → ${this.formatFileSize(compressedSize)} (${compressionRatio}% smaller)`);
+                this.log.info(`[FFMPEG] Size reduction: ${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)} (${compressionRatio}% smaller)`);
             } else {
                 throw new Error('[FFMPEG] Compression completed but output file not found');
             }
@@ -239,7 +238,7 @@ export default class InMemoryJobService implements IJobService {
 
         try {
             const downloadDir = "./temp";
-            await this.ensureDirectoryExists(downloadDir);
+            await ensureDirectoryExists(downloadDir);
 
             // Variables to track the final file path for FFmpeg input
             let finalFilePath: string;
@@ -254,17 +253,17 @@ export default class InMemoryJobService implements IJobService {
             state.state = `[DOWNLOAD] Fetched image metadata: ${result.filename}${result.extension}`;
 
             // Use the actual filename and extension from the media service
-            finalFileName = this.sanitizeFilename(`${result.filename}${result.extension}`);
+            finalFileName = sanitizeFilename(`${result.filename}${result.extension}`);
             finalFilePath = path.join(downloadDir, finalFileName);
 
             // Check if file already exists
-            if (await this.fileExists(finalFilePath)) {
+            if (await fileExists(finalFilePath)) {
                 state.state = `[DOWNLOAD] File already exists, skipping download: ${finalFileName}`;
                 this.log.info(`Skipping download - file already exists: ${finalFilePath}`);
             } else {
                 // Download the file
                 state.state = `[DOWNLOAD] Streaming image to: ${finalFileName}`;
-                await this.streamToFile(result.stream, finalFilePath);
+                await streamToFile(result.stream, finalFilePath);
                 state.state = `[DOWNLOAD] Successfully downloaded: ${finalFileName}`;
                 this.log.info(`Image downloaded successfully: ${finalFilePath}`);
             }
@@ -275,7 +274,7 @@ export default class InMemoryJobService implements IJobService {
 
             // Ensure output directory exists
             const outputDir = "./output/compressed";
-            await this.ensureDirectoryExists(outputDir);
+            await ensureDirectoryExists(outputDir);
 
             // Create output filename with compressed prefix
             const nameWithoutExt = path.parse(finalFileName).name;
@@ -284,21 +283,21 @@ export default class InMemoryJobService implements IJobService {
             const finalOutputPath = path.join(outputDir, compressedFileName);
 
             // Check if compressed file already exists
-            if (await this.fileExists(finalOutputPath)) {
+            if (await fileExists(finalOutputPath)) {
                 state.state = `[FFMPEG] Compressed image already exists: ${compressedFileName}`;
                 this.log.info(`Skipping compression - file already exists: ${finalOutputPath}`);
                 return;
             }
 
             // Verify input file exists before compression
-            if (!await this.fileExists(finalFilePath)) {
+            if (!await fileExists(finalFilePath)) {
                 throw new Error(`Input file not found for compression: ${finalFilePath}`);
             }
 
             // Start image compression and get child process
             const cp = this.ffmpegService.compressImage(
-                finalFilePath, 
-                finalOutputPath, 
+                finalFilePath,
+                finalOutputPath,
                 jobData.options.quality,
                 jobData.options.maxWidth,
                 jobData.options.maxHeight
@@ -361,14 +360,14 @@ export default class InMemoryJobService implements IJobService {
             });
 
             // Verify output file exists and get size info
-            if (await this.fileExists(finalOutputPath)) {
-                const originalSize = await this.getFileSize(finalFilePath);
-                const compressedSize = await this.getFileSize(finalOutputPath);
+            if (await fileExists(finalOutputPath)) {
+                const originalSize = await getFileSize(finalFilePath);
+                const compressedSize = await getFileSize(finalOutputPath);
                 const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(2);
 
-                state.state = `[FFMPEG] Image compression complete! Reduced from ${this.formatFileSize(originalSize)} to ${this.formatFileSize(compressedSize)} (${compressionRatio}% reduction)`;
+                state.state = `[FFMPEG] Image compression complete! Reduced from ${formatFileSize(originalSize)} to ${formatFileSize(compressedSize)} (${compressionRatio}% reduction)`;
                 this.log.info(`[FFMPEG] Final result: ${finalOutputPath}`);
-                this.log.info(`[FFMPEG] Size reduction: ${this.formatFileSize(originalSize)} → ${this.formatFileSize(compressedSize)} (${compressionRatio}% smaller)`);
+                this.log.info(`[FFMPEG] Size reduction: ${formatFileSize(originalSize)} → ${formatFileSize(compressedSize)} (${compressionRatio}% smaller)`);
             } else {
                 throw new Error('[FFMPEG] Image compression completed but output file not found');
             }
@@ -378,72 +377,5 @@ export default class InMemoryJobService implements IJobService {
             state.state = `[ERROR] Failed: ${error.message}`;
             throw error;
         }
-    }
-
-    /**
-     * Sanitize filename to remove/replace invalid characters
-     * @param filename The original filename
-     * @returns Sanitized filename safe for filesystem
-     */
-    private sanitizeFilename(filename: string): string {
-        // Remove or replace invalid characters for cross-platform compatibility
-        return filename
-            .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid chars with underscore
-            .replace(/\s+/g, '_') // Replace spaces with underscore
-            .replace(/_{2,}/g, '_') // Replace multiple underscores with single
-            .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
-            .substring(0, 255); // Limit filename length
-    }
-
-    /**
-     * Get file size for logging/verification
-     */
-    private async getFileSize(filePath: string): Promise<number> {
-        try {
-            const stats = await fs.stat(filePath);
-            return stats.size;
-        } catch {
-            return 0;
-        }
-    }
-
-    private async ensureDirectoryExists(dirPath: string): Promise<void> {
-        try {
-            await fs.access(dirPath);
-        } catch {
-            await fs.mkdir(dirPath, {recursive: true});
-            this.log.info(`Created directory: ${dirPath}`);
-        }
-    }
-
-    private async fileExists(filePath: string): Promise<boolean> {
-        try {
-            await fs.access(filePath);
-            const size = await this.getFileSize(filePath);
-            this.log.debug(`File exists: ${filePath} (${this.formatFileSize(size)})`);
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    private async streamToFile(stream: NodeJS.ReadableStream, filePath: string): Promise<void> {
-        const writeStream = createWriteStream(filePath);
-        await pipeline(stream, writeStream);
-
-        // Log final file size
-        const size = await this.getFileSize(filePath);
-        this.log.info(`File saved: ${path.basename(filePath)} (${this.formatFileSize(size)})`);
-    }
-
-    /**
-     * Format file size in human-readable format
-     */
-    private formatFileSize(bytes: number): string {
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        if (bytes === 0) return '0 Bytes';
-
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
 }

@@ -1,5 +1,5 @@
 ###Start compression job
-POST http://localhost:8000/api/media/compress
+POST http://localhost:8000/api/media/compress-video
 Content-Type: application/json
 
 {

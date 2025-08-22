@@ -15,3 +15,14 @@ export interface GetJobStatusBody {
 export interface GetJobStatusRequest extends Request {
     body: GetJobStatusBody
 }
+
+export interface CompressImageRequestBody {
+    url: string;
+    quality: number;      // 1-100, higher = better quality
+    maxWidth?: number;    // Optional max width
+    maxHeight?: number;   // Optional max height
+}
+
+export interface CompressImageRequest extends Request {
+    body: CompressImageRequestBody;
+}

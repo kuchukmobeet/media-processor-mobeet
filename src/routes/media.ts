@@ -8,8 +8,12 @@ const router = Router();
 const mediaController = container.resolve(MediaController);
 
 // Bind methods to preserve 'this' context
-router.post("/compress", async (req: Request, res: Response) => {
+router.post("/compress-video", async (req: Request, res: Response) => {
     await mediaController.compressMedia(req, res);
+});
+
+router.post("/compress-image", async (req: Request, res: Response) => {
+    await mediaController.compressImage(req, res);
 });
 
 export default router;

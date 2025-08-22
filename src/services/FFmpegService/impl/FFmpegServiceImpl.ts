@@ -45,6 +45,44 @@ export class FFmpegServiceImpl implements IFFmpegService {
         this.logger.debug(`FFmpeg command: ${cmd}`);
         return exec(cmd);
     }
+    
+    /**
+     * Compresses an image using FFmpeg with optional resizing.
+     * 
+     * @param input Path to the source image file
+     * @param output Destination path for compressed image
+     * @param quality Image quality (1-100, higher = better quality)
+     * @param maxWidth Optional maximum width (maintains aspect ratio)
+     * @param maxHeight Optional maximum height (maintains aspect ratio)
+     * @returns The spawned ChildProcess
+     */
+    compressImage(
+        input: string,
+        output: string,
+        quality: number,
+        maxWidth?: number,
+        maxHeight?: number,
+    ): ChildProcess {
+        this.logger.info(`Compress image ${input} -> ${output} at quality ${quality}`);
+        
+        let scaleFilter = '';
+        if (maxWidth || maxHeight) {
+            const width = maxWidth || -1;
+            const height = maxHeight || -1;
+            scaleFilter = `-vf "scale='min(${width},iw)':'min(${height},ih)':force_original_aspect_ratio=decrease"`;
+        }
+        
+        const cmd = `ffmpeg -i "${input}" ` +
+            `${scaleFilter} ` +
+            `-q:v ${Math.max(1, Math.min(31, Math.round((100 - quality) * 31 / 100)))} ` + // Convert 1-100 to FFmpeg's 31-1 scale
+            `-frames:v 1 ` + // Process single image frame
+            `-update 1 ` +   // Allow updating existing output file
+            `-y ` + // Overwrite output file without asking
+            `"${output}"`
+            
+        this.logger.debug(`FFmpeg image command: ${cmd}`);
+        return exec(cmd);
+    }
 }
 
 export default FFmpegServiceImpl;

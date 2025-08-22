@@ -12,6 +12,21 @@ export class CompressMediaReqJobData extends JobDataBase {
     }
 }
 
+export interface ImageCompressionOptions {
+    quality: number;      // 1-100, higher = better quality
+    maxWidth?: number;    // Optional max width
+    maxHeight?: number;   // Optional max height
+}
+
+export class CompressImageReqJobData extends JobDataBase {
+    public options: ImageCompressionOptions;
+    
+    constructor(url: string, options: ImageCompressionOptions) {
+        super(url);
+        this.options = options;
+    }
+}
+
 export interface JobState {
     state: string;
     jobData: JobDataBase;

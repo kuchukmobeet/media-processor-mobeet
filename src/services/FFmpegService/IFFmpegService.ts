@@ -6,4 +6,12 @@ export interface IFFmpegService {
         output: string,
         bitrate: number,
     ): ChildProcess;
+    
+    compressImage(
+        input: string,
+        output: string,
+        quality: number,
+        maxWidth?: number,
+        maxHeight?: number,
+    ): ChildProcess;
 }

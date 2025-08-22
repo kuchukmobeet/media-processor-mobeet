@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Compression Job Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .progress-container { margin-top: 20px; border: 1px solid #ddd; border-radius: 4px; max-height: 400px; overflow-y: auto; }
+        .progress-header { background: #f8f9fa; padding: 10px; border-bottom: 1px solid #ddd; font-weight: bold; }
+        .progress-log { padding: 10px; font-family: monospace; font-size: 12px; }
+        .log-entry { margin-bottom: 5px; padding: 4px 8px; border-radius: 3px; }
+        .phase-DOWNLOAD { background: #e3f2fd; }
+        .phase-FFMPEG { background: #f3e5f5; }
+        .phase-COMPLETED { background: #e8f5e8; color: #2e7d32; }
+        .phase-FAILED { background: #ffebee; color: #c62828; }
+        .phase-QUEUE { background: #fff3e0; }
+        .phase-PROCESSING { background: #e1f5fe; }
+        .status { margin-top: 10px; padding: 10px; border-radius: 4px; }
+        .status.connected { background: #e8f5e8; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .job-info { background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+<h1>Media Compression Job Test</h1>
+
+<div class="form-group">
+    <label for="serverUrl">Server URL:</label>
+    <input type="text" id="serverUrl" placeholder="http://localhost:3000"
+           value="http://localhost:3000">
+</div>
+
+<div class="form-group">
+    <label for="mediaUrl">Media URL:</label>
+    <input type="text" id="mediaUrl" placeholder="https://example.com/video.mp4"
+           value="https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4">
+</div>
+
+<button id="submitBtn" onclick="submitJob()">Submit Compression Job</button>
+
+<div id="jobInfo" class="job-info" style="display: none;">
+    <strong>Job ID:</strong> <span id="jobId"></span>
+    <button onclick="disconnectSSE()" style="float: right; background: #dc3545;">Disconnect</button>
+</div>
+
+<div id="status" class="status" style="display: none;"></div>
+
+<div id="progressContainer" class="progress-container" style="display: none;">
+    <div class="progress-header">Real-time Progress</div>
+    <div id="progressLog" class="progress-log"></div>
+</div>
+
+<script>
+    let eventSource = null;
+    let currentJobId = null;
+
+    async function submitJob() {
+        const serverUrl = document.getElementById('serverUrl').value.trim();
+        const mediaUrl = document.getElementById('mediaUrl').value.trim();
+
+        if (!serverUrl) {
+            alert('Please enter a server URL');
+            return;
+        }
+        if (!mediaUrl) {
+            alert('Please enter a media URL');
+            return;
+        }
+
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        try {
+            const apiUrl = `${serverUrl}/api/media/compress-video`;
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: mediaUrl })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                currentJobId = result.data;
+                document.getElementById('jobId').textContent = currentJobId;
+                document.getElementById('jobInfo').style.display = 'block';
+                connectToSSE(currentJobId);
+            } else {
+                showStatus('error', 'Failed to submit job: ' + result.message);
+            }
+        } catch (error) {
+            showStatus('error', 'Error submitting job: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Compression Job';
+        }
+    }
+
+    function connectToSSE(jobId) {
+        disconnectSSE(); // Clean up any existing connection
+
+        const serverUrl = document.getElementById('serverUrl').value.trim();
+        if (!serverUrl) {
+            showStatus('error', 'Server URL is required for SSE connection');
+            return;
+        }
+
+        showStatus('connected', 'Connecting to job progress stream...');
+        document.getElementById('progressContainer').style.display = 'block';
+        clearProgressLog();
+
+        const sseUrl = `${serverUrl}/api/job/events/${jobId}`;
+        eventSource = new EventSource(sseUrl);
+
+        eventSource.onopen = function(event) {
+            showStatus('connected', 'Connected to progress stream');
+            logProgress('SYSTEM', 'Connected to SSE stream', new Date().toISOString());
+        };
+
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'connected') {
+                    logProgress('SYSTEM', data.message, new Date(data.timestamp).toISOString());
+                } else if (data.type === 'progress') {
+                    logProgress(data.phase, data.message, new Date(data.timestamp).toISOString());
+                } else if (data.type === 'completion') {
+                    logProgress(data.phase, data.message, new Date(data.timestamp).toISOString());
+                    showStatus('connected', 'Job completed - connection will close');
+                    setTimeout(() => disconnectSSE(), 2000);
+                } else if (data.type === 'heartbeat') {
+                    // Optional: show heartbeat in log for debugging
+                    // logProgress('HEARTBEAT', 'Connection alive', new Date(data.timestamp).toISOString());
+                }
+            } catch (error) {
+                logProgress('ERROR', 'Failed to parse SSE data: ' + error.message, new Date().toISOString());
+            }
+        };
+
+        eventSource.onerror = function(event) {
+            if (eventSource.readyState === EventSource.CONNECTING) {
+                showStatus('error', 'Reconnecting to progress stream...');
+            } else {
+                showStatus('error', 'Connection lost to progress stream');
+                logProgress('ERROR', 'SSE connection error', new Date().toISOString());
+            }
+        };
+    }
+
+    function disconnectSSE() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+            showStatus('error', 'Disconnected from progress stream');
+            logProgress('SYSTEM', 'Disconnected from SSE stream', new Date().toISOString());
+        }
+    }
+
+    function showStatus(type, message) {
+        const statusEl = document.getElementById('status');
+        statusEl.className = `status ${type}`;
+        statusEl.textContent = message;
+        statusEl.style.display = 'block';
+    }
+
+    function logProgress(phase, message, timestamp) {
+        const logEl = document.getElementById('progressLog');
+        const entry = document.createElement('div');
+        entry.className = `log-entry phase-${phase}`;
+
+        const time = new Date(timestamp).toLocaleTimeString();
+        entry.innerHTML = `<strong>[${time}] [${phase}]</strong> ${message}`;
+
+        logEl.appendChild(entry);
+        logEl.scrollTop = logEl.scrollHeight; // Auto-scroll to bottom
+    }
+
+    function clearProgressLog() {
+        document.getElementById('progressLog').innerHTML = '';
+    }
+
+    // Handle page refresh/close
+    window.addEventListener('beforeunload', function() {
+        disconnectSSE();
+    });
+
+    // Allow Enter key to submit
+    document.getElementById('mediaUrl').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            submitJob();
+        }
+    });
+</script>
+</body>
+</html>
